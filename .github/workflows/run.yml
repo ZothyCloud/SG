@@ -1,4 +1,4 @@
-name: Run Cloudflare Gotty VM
+name: Run Cloudflare TTYD VM
 
 on: [workflow_dispatch]
 
@@ -7,32 +7,48 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Clone repo
-        uses: actions/checkout@v3
-
-      - name: Switch to persistent branch
+      - name: ⬇️ Install Dependencies
         run: |
-          git fetch origin vm-data
-          git checkout vm-data
+          sudo apt update
+          sudo apt install -y curl unzip
 
-      - name: Restore data
+      - name: 🗂️ Restore VM Data
         run: |
-          mkdir -p .vm_data
-          cp -r /vm_data/* .vm_data 2>/dev/null || true
+          git clone --depth 1 --branch vm-data https://github.com/${{ github.repository }} vm_data || mkdir vm_data
 
-      - name: Make start.sh executable
-        run: chmod +x start.sh
-
-      - name: Start VM
-        run: ./start.sh
-
-      - name: Save VM data after job completes
-        if: always()
+      - name: 🌐 Install and Start TTYD
         run: |
-          rm -rf .vm_data
-          cp -r /vm_data .vm_data || true
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add .vm_data
-          git commit -m "🔄 Save VM data" || echo "No changes to commit"
-          git push origin vm-data
+          curl -Lo ttyd.tar.gz https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd-linux.x86_64.tar.gz
+          tar -xzf ttyd.tar.gz
+          chmod +x ttyd
+          mv ttyd /usr/local/bin/ttyd
+
+      - name: ☁️ Install Cloudflared
+        run: |
+          curl -Lo cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared.deb || true
+          sudo apt -f install -y
+
+      - name: 🚀 Start TTYD in Background with Cloudflare Tunnel
+        run: |
+          mkdir -p /vm_data
+          cd /vm_data
+          nohup ttyd bash > /dev/null 2>&1 &
+          nohup cloudflared tunnel --url http://localhost:7681 > tunnel.log 2>&1 &
+
+      - name: 🔄 Auto Backup Every 5 Hours
+        run: |
+          echo "while true; do
+            git config --global user.email 'actions@github.com'
+            git config --global user.name 'GitHub Actions'
+            cd vm_data || mkdir vm_data && cd vm_data
+            git init
+            git remote add origin https://github.com/${{ github.repository }} || true
+            git checkout -B vm-data
+            git add .
+            git commit -m '🔄 Auto Backup'
+            git push -f origin vm-data
+            sleep 18000
+          done" > backup.sh
+          chmod +x backup.sh
+          nohup bash backup.sh > /dev/null 2>&1 &
