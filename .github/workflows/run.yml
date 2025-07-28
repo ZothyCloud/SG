@@ -17,11 +17,10 @@ jobs:
           git clone --depth 1 --branch vm-data https://github.com/${{ github.repository }} vm_data || mkdir vm_data
 
       - name: 🌐 Install and Start TTYD
-        run: |
-          curl -Lo ttyd.tar.gz https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd-linux.x86_64.tar.gz
-          tar -xzf ttyd.tar.gz
-          chmod +x ttyd
-          mv ttyd /usr/local/bin/ttyd
+  run: |
+    curl -Lo ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd_linux.x86_64
+    chmod +x ttyd
+    sudo mv ttyd /usr/local/bin/
 
       - name: ☁️ Install Cloudflared
         run: |
