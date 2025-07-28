@@ -1,28 +1,33 @@
 #!/bin/bash
 
-mkdir -p /vm_data
-
-if [ -d ".vm_data" ]; then
-  echo "🔁 Restoring previous VM data..."
-  cp -r .vm_data/* /vm_data/
-fi
-
-echo "🌐 Installing Cloudflare Tunnel..."
-wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
-mv cloudflared-linux-amd64 cloudflared
+echo "📦 Installing Cloudflared..."
+wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O cloudflared
 chmod +x cloudflared
+mv cloudflared /usr/local/bin/
 
-echo "🖥️ Installing gotty..."
-wget -q https://github.com/yudai/gotty/releases/download/v1.0.1/gotty_linux_amd64.tar.gz
+echo "📦 Installing GoTTY..."
+wget -q https://github.com/yudai/gotty/releases/latest/download/gotty_linux_amd64.tar.gz
 tar -xzf gotty_linux_amd64.tar.gz
 chmod +x gotty
+mv gotty /usr/local/bin/
 
-echo "🚀 Starting gotty terminal on port 7681..."
-nohup ./gotty -p 7681 bash > gotty.log 2>&1 &
+echo "🌐 Starting GoTTY terminal..."
+# Gotty on http://localhost:8080
+gotty -w --port 8080 bash &
 
-echo "☁️ Starting Cloudflare tunnel..."
-nohup ./cloudflared tunnel --url http://localhost:7681 > cf.log 2>&1 &
+echo "🕒 Automatic backup every 5 hours started in background..."
+(
+  while true; do
+    echo "🔁 Backing up VM data..."
+    rm -rf .vm_data
+    cp -r /vm_data .vm_data
+    git add .vm_data
+    git commit -m "⏱️ Auto-backup at $(date)"
+    git push origin vm-data
+    sleep 18000  # 5 hours
+  done
+) &
 
-sleep 5
-echo "🌍 Waiting for public Cloudflare link..."
-grep -o 'https://[-a-zA-Z0-9]*\.trycloudflare\.com' cf.log | head -n1
+echo "☁️ Starting Cloudflare tunnel... (public URL will appear below)"
+# Run Cloudflared in foreground so the public URL is visible
+cloudflared tunnel --url http://localhost:8080
