@@ -6,56 +6,20 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 360  # 6 hours
 
     steps:
-      - name: 🧹 Clean existing data (optional)
-        run: |
-          rm -rf .vm_data || true
+    - name: Clone repo
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 1
+        ref: vm-data
 
-      - name: 🧬 Clone latest saved VM data
-        run: |
-          git clone --depth 1 --branch vm-data https://github.com/ZothyCloud/SG vm_data || mkdir vm_data
+    - name: Set up VM data directory
+      run: |
+        git clone --depth 1 --branch vm-data https://github.com/${{ github.repository }} vm_data || mkdir vm_data
 
-      - name: 🌐 Install dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y curl unzip
+    - name: Make start.sh executable
+      run: chmod +x start.sh
 
-      - name: ⚙️ Install TTYD
-        run: |
-          curl -Lo ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd_linux.x86_64
-          chmod +x ttyd
-          sudo mv ttyd /usr/local/bin/
-
-      - name: ☁️ Install Cloudflare tunnel
-        run: |
-          curl -Lo cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
-          chmod +x cloudflared
-          sudo mv cloudflared /usr/local/bin/
-
-      - name: 🛠️ Setup /vm_data link
-        run: |
-          mkdir -p /home/runner/work/SG/SG/vm_data
-          sudo ln -s /home/runner/work/SG/SG/vm_data /vm_data
-
-      - name: 🌐 Start TTYD + Cloudflare Tunnel
-        run: |
-          nohup ttyd -p 7681 bash &
-          nohup cloudflared tunnel --url http://localhost:7681 &
-
-      - name: 💾 Auto-backup every 5 hours
-        run: |
-          echo "while true; do
-            echo '🔁 Backing up data...'
-            rm -rf vm_data/*
-            cp -r /vm_data/* vm_data/ || true
-            git config --global user.email 'actions@github.com'
-            git config --global user.name 'github-actions'
-            git add .
-            git commit -m '🔄 Auto backup' || echo 'Nothing to commit'
-            git push origin vm-data || echo 'Push failed'
-            sleep 18000  # 5 hours
-          done" > backup.sh
-          chmod +x backup.sh
-          nohup bash backup.sh &
+    - name: Run VM
+      run: ./start.sh
