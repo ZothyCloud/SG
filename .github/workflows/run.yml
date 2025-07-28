@@ -1,25 +1,51 @@
-name: Run Cloudflare TTYD VM
+name: ☁️ Start Cloud VM with TTYD + Auto Backup
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 */5 * * *'  # Every 5 hours
 
 jobs:
-  build:
+  run-vm:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Clone repo
+    - name: ⬇️ Checkout code (main)
       uses: actions/checkout@v3
       with:
-        fetch-depth: 1
-        ref: vm-data
+        fetch-depth: 0
 
-    - name: Set up VM data directory
+    - name: 📦 Restore vm_data from backup branch
       run: |
-        git clone --depth 1 --branch vm-data https://github.com/${{ github.repository }} vm_data || mkdir vm_data
+        git fetch origin vm-data || echo "No backup branch yet"
+        git checkout vm-data -- vm_data || echo "No previous vm_data found"
 
-    - name: Make start.sh executable
+    - name: 🧠 Set up Git identity
+      run: |
+        git config --global user.email "bot@zothycloud.local"
+        git config --global user.name "ZothyBot"
+
+    - name: ✅ Make start.sh executable
       run: chmod +x start.sh
 
-    - name: Run VM
+    - name: 🚀 Start VM (with TTYD and Tunnel)
       run: ./start.sh
+
+    - name: 💤 Keep VM alive
+      run: sleep infinity
+
+    - name: 💾 Backup vm_data to vm-data branch
+      if: github.event_name != 'workflow_dispatch'  # Only auto-backup on schedule
+      env:
+        GH_PAT: ${{ secrets.GH_PAT }}
+      run: |
+        git remote set-url origin https://x-access-token:${GH_PAT}@github.com/${{ github.repository }}
+        git checkout -B vm-data
+        git add vm_data || true
+
+        # Only commit if data changed
+        if ! git diff --cached --quiet; then
+          git commit -m "📦 Auto backup: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          git push origin vm-data
+        else
+          echo "✅ No vm_data changes to back up."
